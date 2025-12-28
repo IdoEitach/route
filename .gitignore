@@ -1,55 +1,61 @@
-# Prerequisites
-*.d
+# -------------------------
+# Build directories
+# -------------------------
+build/
+cmake-build-*/
+out/
 
-# Object files
+# -------------------------
+# Compiled objects & binaries
+# -------------------------
 *.o
-*.ko
 *.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
 *.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
+*.lib
 *.so
-*.so.*
-*.dylib
-
-# Executables
+*.dll
 *.exe
 *.out
-*.app
-*.i*86
-*.x86_64
-*.hex
 
-# Debug files
+# -------------------------
+# Debug / profiler files
+# -------------------------
 *.dSYM/
-*.su
-*.idb
-*.pdb
+*.stackdump
+gmon.out
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# -------------------------
+# CMake
+# -------------------------
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
 
-# debug information files
-*.dwo
+# -------------------------
+# IDE / Editor files
+# -------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# -------------------------
+# OS junk
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+
+# -------------------------
+# Local config / secrets
+# -------------------------
+.env
+.env.*
+
