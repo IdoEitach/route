@@ -41,7 +41,7 @@ compile_commands.json
 *.swp
 *.swo
 *.tmp
-
+.cache/
 # -------------------------
 # OS junk
 # -------------------------
