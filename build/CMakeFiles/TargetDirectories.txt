@@ -1,0 +1,3 @@
+/home/daniel/Documents/ido/route/build/CMakeFiles/main.dir
+/home/daniel/Documents/ido/route/build/CMakeFiles/edit_cache.dir
+/home/daniel/Documents/ido/route/build/CMakeFiles/rebuild_cache.dir

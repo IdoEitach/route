@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/daniel/Documents/ido/route/build",
+  "command": "/usr/bin/c++  -I/home/daniel/Documents/ido/route/include -std=gnu++17 -o CMakeFiles/main.dir/src/hash_table.cpp.o -c /home/daniel/Documents/ido/route/src/hash_table.cpp",
+  "file": "/home/daniel/Documents/ido/route/src/hash_table.cpp",
+  "output": "CMakeFiles/main.dir/src/hash_table.cpp.o"
+},
+{
+  "directory": "/home/daniel/Documents/ido/route/build",
+  "command": "/usr/bin/c++  -I/home/daniel/Documents/ido/route/include -std=gnu++17 -o CMakeFiles/main.dir/src/main.cpp.o -c /home/daniel/Documents/ido/route/src/main.cpp",
+  "file": "/home/daniel/Documents/ido/route/src/main.cpp",
+  "output": "CMakeFiles/main.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/daniel/Documents/ido/route/build",
+  "command": "/usr/bin/c++  -I/home/daniel/Documents/ido/route/include -std=gnu++17 -o CMakeFiles/main.dir/src/packet_builder.cpp.o -c /home/daniel/Documents/ido/route/src/packet_builder.cpp",
+  "file": "/home/daniel/Documents/ido/route/src/packet_builder.cpp",
+  "output": "CMakeFiles/main.dir/src/packet_builder.cpp.o"
+}
+]
