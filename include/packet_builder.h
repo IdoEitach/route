@@ -1,5 +1,4 @@
-#ifndef PACKET_BUILDER_H
-#define PACKET_BUILDER_H
+#pragma once
 
 #include <arpa/inet.h>
 #include <cstdint>
@@ -17,5 +16,3 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
                                       const std::string &dest_ip,
                                       uint16_t dest_port,
                                       const std::string &payload);
-
-#endif // PACKET_BUILDER_H

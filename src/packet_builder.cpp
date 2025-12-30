@@ -1,15 +1,18 @@
 #include "packet_builder.h"
 
-uint16_t calculate_udp_checksum(const uint16_t *buf, int nwords) {
-
+uint16_t calculate_ip_checksum(const uint8_t *buf, int len) {
   uint32_t sum = 0;
-  for (int i = 0; i < nwords; i++)
-    sum += ntohs(buf[i]); // network byte order
+
+  for (size_t i = 0; i < len; i += 2) {
+    uint16_t word = (static_cast<uint16_t>(buf[i]) << 8) |
+                    (static_cast<uint16_t>(buf[i + 1]));
+    sum += word;
+  }
 
   while (sum >> 16)
     sum = (sum & 0xFFFF) + (sum >> 16);
 
-  return htons(~sum);
+  return static_cast<uint16_t>(~sum);
 }
 
 void print_packet(const std::vector<uint8_t> &packet) {
@@ -19,6 +22,10 @@ void print_packet(const std::vector<uint8_t> &packet) {
     throw std::invalid_argument("Packet too small");
   }
 
+  // checksum print_packet
+  uint16_t ip_checksum = ntohs(*(uint16_t *)(packet.data() + 10));
+  std::cout << "IP Header Checksum: 0x" << std::hex << ip_checksum << std::dec
+            << std::endl;
   std::cout << "src ip:" << (int)packet[12] << "." << (int)packet[13] << "."
             << (int)packet[14] << "." << (int)packet[15] << std::endl;
   std::cout << "dst ip:" << (int)packet[16] << "." << (int)packet[17] << "."
@@ -54,7 +61,10 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   iph->protocol = IPPROTO_UDP;
   inet_pton(AF_INET, src_ip.c_str(), &iph->saddr);
   inet_pton(AF_INET, dest_ip.c_str(), &iph->daddr);
-  iph->check = calculate_udp_checksum((uint16_t *)iph, ip_header_len / 2);
+  iph->check = 0;
+  iph->check = calculate_ip_checksum(reinterpret_cast<const uint8_t *>(iph),
+                                     ip_header_len);
+
   // we div it by 2 because there are 20 bytes at the ip header and each word is
   // 2 bytes checksum is calculated over words 2 bytes
   // --- UDP header ---

@@ -1,5 +1,4 @@
-#ifndef HASH_TABLE_H
-#define HASH_TABLE_H
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -15,5 +14,3 @@ void insert_ip_port(uint16_t port, const std::string &ip);
 void print_table();
 
 void remove_ip_port(uint16_t port);
-
-#endif // HASH_TABLE_H
