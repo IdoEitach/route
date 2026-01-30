@@ -10,14 +10,14 @@
 
 class RawSocket {
 public:
-  RawSocket();
-  ~RawSocket();
+  RawSocket() : sockfd_(-1) {}
+  ~RawSocket() = default;
 
   RawSocket(const RawSocket &) = delete;
   RawSocket &operator=(const RawSocket &) = delete;
 
-  void open_raw_socket(int *out_fd);
-  void send_raw_packet(int sockfd, const uint8_t *packet, size_t packet_len);
+  void open_raw_socket();
+  void send_raw_packet(const uint8_t *packet, size_t packet_len);
 
 private:
   int sockfd_;
