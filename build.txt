@@ -1,0 +1,12 @@
+How to compile and run the project:
+go to the build directory:
+  cd build
+  then run : -> this command generate the build system
+  CMAKE -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+  then run : -> this command to build:
+  camke --build .
+  finally run the executable:
+  ./[main] program_name gave in the CmakeLists.txt file 
+
+
+
