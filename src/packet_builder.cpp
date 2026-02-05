@@ -46,8 +46,7 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
                                       uint16_t src_port,
                                       const std::string &dest_ip,
                                       uint16_t dest_port,
-
-                                      const std::string &data) {
+                                      const std::string &data, uint8_t ttl) {
   const int ip_header_len = 20;
   const int udp_header_len = 8;
   int total_len = ip_header_len + udp_header_len + data.size();
@@ -67,12 +66,11 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   iph->tot_len = htons(total_len);
   iph->id = htonl(54321);
   iph->frag_off = 0;
-  iph->ttl = 255;
+  iph->ttl = ttl;
   iph->protocol = IPPROTO_UDP;
   inet_pton(AF_INET, src_ip.c_str(), &iph->saddr);
   inet_pton(AF_INET, dest_ip.c_str(), &iph->daddr);
-  iph->check = calculate_ip_checksum(reinterpret_cast<const uint8_t *>(iph),
-                                     ip_header_len);
+  iph->check = 0; // initial checksum
   // we div it by 2 because there are 20 bytes at the ip header and each word is
   // 2 bytes checksum is calculated over words 2 bytes
   // --- UDP header ---
@@ -82,4 +80,23 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   udph->check = 0; // optional for now
 
   return packet;
+}
+
+void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_ip,
+                     std::string &dst_ip, uint16_t &src_port,
+                     uint16_t &dst_port, std::string &payload,
+                     uint8_t &protocol) {
+  if (buffer.size() < 20) {
+    throw std::invalid_argument("Packet too small to contain IP .");
+  }
+
+  src_ip = std::to_string(buffer[12]) + "." + std::to_string(buffer[13]) + "." +
+           std::to_string(buffer[14]) + "." + std::to_string(buffer[15]);
+  dst_ip = std::to_string(buffer[16]) + "." + std::to_string(buffer[17]) + "." +
+           std::to_string(buffer[18]) + "." + std::to_string(buffer[19]);
+  protocol = buffer[9];
+  src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
+  dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
+
+  payload = std::string(buffer.begin() + 28, buffer.end());
 }
