@@ -28,6 +28,7 @@ int main() {
   RawSocket raw_socket = RawSocket();
 
   try {
+
     raw_socket.open_raw_socket(AF_INET, IPPROTO_RAW);
     raw_socket.send_raw_packet(packet.data(), packet.size());
 
@@ -46,8 +47,7 @@ int main() {
     sniffer_socket.sniff_packets("wlp1s0");
   } catch (const std::exception &e) {
     std::cerr << "Error sniffing packets: " << e.what() << std::endl;
-    return EXIT_FAILURE;
   }
-
+  std::cout << "well its done" << std::endl;
   return 0;
 }

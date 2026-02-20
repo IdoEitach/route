@@ -6,10 +6,10 @@
 #include <iostream>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 #include <vector>
-
 void print_packet(const std::vector<uint8_t> &packet);
 
 std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
@@ -18,7 +18,7 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
                                       uint16_t dest_port,
                                       const std::string &payload, uint8_t ttl);
 
-void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_ip,
-                     std::string &dst_ip, uint16_t &src_port,
-                     uint16_t &dst_port, std::string &payload,
-                     uint8_t &protocol);
+void remove_ethernet_layer(std::vector<uint8_t> &packet);
+
+void handle_ip4_layer(const std::vector<uint8_t> &packet, std::string &src_ip,
+                      std::string &dst_ip);

@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 uint16_t calculate_ip_checksum(const uint8_t *buf, int len) {
@@ -82,21 +85,26 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   return packet;
 }
 
-void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_ip,
-                     std::string &dst_ip, uint16_t &src_port,
-                     uint16_t &dst_port, std::string &payload,
-                     uint8_t &protocol) {
-  if (buffer.size() < 20) {
-    throw std::invalid_argument("Packet too small to contain IP .");
+/// this function removes the Ethernet layer so it will be sended as
+/// IPPROTOO_RAW
+void remove_ehternet_layer(std::vector<uint8_t> &buffer) {
+  if (buffer.size() < 14) {
+    throw std::runtime_error("Packet too small to contain Ethernet header.");
   }
+  buffer.erase(buffer.begin(), buffer.begin() + 14);
+}
 
-  src_ip = std::to_string(buffer[12]) + "." + std::to_string(buffer[13]) + "." +
-           std::to_string(buffer[14]) + "." + std::to_string(buffer[15]);
-  dst_ip = std::to_string(buffer[16]) + "." + std::to_string(buffer[17]) + "." +
-           std::to_string(buffer[18]) + "." + std::to_string(buffer[19]);
-  protocol = buffer[9];
-  src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
-  dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
-
-  payload = std::string(buffer.begin() + 28, buffer.end());
+void handle_ip4_layer(std::vector<uint8_t> &buffer, std::string &src_ip,
+                      std::string &dst_ip) {
+  if (buffer.size() < 20) {
+    throw std::runtime_error("Packet too small to contain IP header.");
+  }
+  // cleraing the old checksum
+  buffer[10] = 0x00;
+  buffer[11] = 0x00;
+  // Recalculate IP checksum
+  uint16_t new_checksum = calculate_ip_checksum(buffer.data(), 20);
+  uint16_t net = htons(new_checksum);
+  buffer[10] = net >> 8;
+  buffer[11] = net & 0xFF;
 }

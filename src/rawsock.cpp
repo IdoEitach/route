@@ -1,11 +1,4 @@
 #include <../include/rawsock.h>
-#include <cstddef>
-#include <cstdint>
-#include <endian.h>
-#include <memory>
-#include <netinet/in.h>
-#include <string>
-#include <sys/socket.h>
 
 void RawSocket::open_raw_socket(int domain, int protocol) {
   this->sockfd_ = socket((domain), SOCK_RAW, protocol);
@@ -75,21 +68,34 @@ void RawSocket::sniff_packets(std::string interface_name) {
 
     ssize_t num_bytes = recvfrom(this->sockfd_, buffer.data(), buffer.size(), 0,
                                  nullptr, nullptr);
-    std::cout << "Received packet of size: " << num_bytes << " bytes"
-              << std::endl;
+
     if (num_bytes < 0) {
       throw std::runtime_error("Failed to receive packet");
     }
-    std::string src_ip, dst_ip, payload;
+    std::string src_mac, dst_mac, src_ip, dst_ip, payload;
     uint16_t src_port, dst_port;
     uint8_t protocol;
 
-    get_packet_data(buffer, src_ip, dst_ip, src_port, dst_port, payload,
-                    protocol);
-    std::cout << "Received packet: " << num_bytes << " bytes" << std::endl;
-    std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
-              << ", Src Port: " << src_port << ", Dst Port: " << dst_port
-              << ", Protocol: " << (int)protocol << ", Payload: " << payload
-              << std::endl;
+    get_mac_address(buffer, src_mac, dst_mac);
+    get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port,
+                    dst_port, payload, protocol);
+
+    remove_ethernet_layer(buffer);
+
+    if (src_mac == "6c:f6:da:82:48:cb") {
+      std::cout << "Received packet: " << num_bytes << " bytes " << std::endl;
+      std::cout << "Src Mac:" << src_mac << std::endl;
+      std::cout << "Dst Mac: " << dst_mac << std::endl;
+      std::cout << "Src IP: " << src_ip << std::endl;
+      std::cout << "Dst IP: " << dst_ip << std::endl;
+      std::cout << "Src Port: " << src_port << std::endl;
+      std::cout << "Dst Port: " << dst_port << std::endl;
+      std::cout << "Protocol: " << (int)protocol << std::endl;
+      std::cout << "Payload: " << payload << std::endl;
+    }
+    // std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
+    //           << ", Src Port: " << src_port << ", Dst Port: " << dst_port
+    //           << ", Protocol: " << (int)protocol << ", Payload: " << payload
+    //           << std::endl;
   }
 }

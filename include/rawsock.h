@@ -1,19 +1,22 @@
 #pragma once
 
 #include "packet_builder.h"
+#include "packet_detail.h"
 #include <arpa/inet.h>
 #include <cstddef>
 #include <cstdint>
+#include <endian.h>
 #include <iostream>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <string>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <vector>
+
 class RawSocket {
 public:
   RawSocket() : sockfd_(-1) {}
