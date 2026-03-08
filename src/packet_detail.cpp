@@ -48,25 +48,33 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
                      std::string &dst_ip, uint16_t &src_port,
                      uint16_t &dst_port, std::string &payload,
                      uint8_t &protocol) {
-  std::cout << "Packet data (first 32 bytes): ";
-  for (int i = 0; i < 32; i++) {
+  std::cout << "frame data (first 14 bytes): ";
+  for (int i = 0; i < 14; i++) {
     std::cout << std::hex << (int)buffer[i] << " ";
   }
   std::cout << std::dec << "end of packet" << std::endl;
 
+  std::cout << "the ipv4 header (next 20 bytes): ";
+  for (int i = 0; i <= 19; i++) {
+    std::cout << (int)buffer[i + 14] << " ";
+  }
+  std::cout << "the ip src is:" << std::endl;
+  std::cout << (int)buffer[26] << "." << (int)buffer[27] << "."
+            << (int)buffer[28] << "." << (int)buffer[29] << std::endl;
   if (buffer.size() < 20) {
     throw std::runtime_error("Packet too small to contain IP .");
   }
 
-  // getting the mac address
-  get_mac_address(buffer, src_mac, dst_mac);
-
-  if ((buffer[12] != 0x08 || buffer[13] != 0x00)) {
+  if ((buffer[12] != 0x08 || buffer[13] != 0x00) &&
+      (buffer[12] != 0x86 || buffer[13] != 0xdd)) {
     std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
               << (int)buffer[13] << std::dec << std::endl;
-    throw std::runtime_error("Not an IPv4 packet.");
+  } else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
+    throw std::runtime_error("Vlan tagged packet, not supported yet.:)");
   }
 
+  // getting the mac address
+  get_mac_address(buffer, src_mac, dst_mac);
   get_ipv4_address((uint32_t *)((uint32_t *)buffer.data() + 26), src_ip);
   get_ipv4_address((uint32_t *)((uint32_t *)buffer.data() + 30), dst_ip);
   src_port = ntohs(*(uint16_t *)(buffer.data() + 20));

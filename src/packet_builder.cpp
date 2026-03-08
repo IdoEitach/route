@@ -87,7 +87,7 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
 
 /// this function removes the Ethernet layer so it will be sended as
 /// IPPROTOO_RAW
-void remove_ehternet_layer(std::vector<uint8_t> &buffer) {
+void remove_ethernet_layer(std::vector<uint8_t> &buffer) {
   if (buffer.size() < 14) {
     throw std::runtime_error("Packet too small to contain Ethernet header.");
   }
