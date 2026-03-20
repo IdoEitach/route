@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 uint16_t calculate_ip_checksum(const uint8_t *buf, int len) {
@@ -46,8 +49,7 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
                                       uint16_t src_port,
                                       const std::string &dest_ip,
                                       uint16_t dest_port,
-
-                                      const std::string &data) {
+                                      const std::string &data, uint8_t ttl) {
   const int ip_header_len = 20;
   const int udp_header_len = 8;
   int total_len = ip_header_len + udp_header_len + data.size();
@@ -67,12 +69,11 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   iph->tot_len = htons(total_len);
   iph->id = htonl(54321);
   iph->frag_off = 0;
-  iph->ttl = 255;
+  iph->ttl = ttl;
   iph->protocol = IPPROTO_UDP;
   inet_pton(AF_INET, src_ip.c_str(), &iph->saddr);
   inet_pton(AF_INET, dest_ip.c_str(), &iph->daddr);
-  iph->check = calculate_ip_checksum(reinterpret_cast<const uint8_t *>(iph),
-                                     ip_header_len);
+  iph->check = 0; // initial checksum
   // we div it by 2 because there are 20 bytes at the ip header and each word is
   // 2 bytes checksum is calculated over words 2 bytes
   // --- UDP header ---
@@ -82,4 +83,28 @@ std::vector<uint8_t> build_udp_packet(const std::string &src_ip,
   udph->check = 0; // optional for now
 
   return packet;
+}
+
+/// this function removes the Ethernet layer so it will be sended as
+/// IPPROTOO_RAW
+void remove_ethernet_layer(std::vector<uint8_t> &buffer) {
+  if (buffer.size() < 14) {
+    throw std::runtime_error("Packet too small to contain Ethernet header.");
+  }
+  buffer.erase(buffer.begin(), buffer.begin() + 14);
+}
+
+void handle_ip4_layer(std::vector<uint8_t> &buffer, std::string &src_ip,
+                      std::string &dst_ip) {
+  if (buffer.size() < 20) {
+    throw std::runtime_error("Packet too small to contain IP header.");
+  }
+  // cleraing the old checksum
+  buffer[10] = 0x00;
+  buffer[11] = 0x00;
+  // Recalculate IP checksum
+  uint16_t new_checksum = calculate_ip_checksum(buffer.data(), 20);
+  uint16_t net = htons(new_checksum);
+  buffer[10] = net >> 8;
+  buffer[11] = net & 0xFF;
 }
