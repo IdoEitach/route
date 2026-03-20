@@ -80,8 +80,6 @@ void RawSocket::sniff_packets(std::string interface_name) {
     get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port,
                     dst_port, payload, protocol);
 
-    remove_ethernet_layer(buffer);
-
     if (src_mac == "6c:f6:da:82:48:cb") {
       std::cout << "Received packet: " << num_bytes << " bytes " << std::endl;
       std::cout << "Src Mac:" << src_mac << std::endl;
@@ -93,9 +91,12 @@ void RawSocket::sniff_packets(std::string interface_name) {
       std::cout << "Protocol: " << (int)protocol << std::endl;
       std::cout << "Payload: " << payload << std::endl;
     }
-    // std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
-    //           << ", Src Port: " << src_port << ", Dst Port: " << dst_port
-    //           << ", Protocol: " << (int)protocol << ", Payload: " << payload
-    //           << std::endl;
+
+    std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac
+              << std::endl;
+    std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
+              << ", Src Port: " << src_port << ", Dst Port: " << dst_port
+              << ", Protocol: " << (int)protocol << ", Payload: " << payload
+              << std::endl;
   }
 }

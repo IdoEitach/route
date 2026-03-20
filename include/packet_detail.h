@@ -21,4 +21,5 @@ void get_mac_address(const std::vector<uint8_t> &buffer,
                      std::string &src_mac_address,
                      std::string &dst_mac_address);
 
-void get_ipv4_address(const uint32_t *buffer, std::string &ip_str);
+void get_ipv4_address(const uint8_t *buffer, std::string &src_str,
+                      std::string &dst_str);

@@ -1,4 +1,5 @@
 #include "../include/packet_detail.h"
+#include <cstdint>
 
 void get_mac_address(const std::vector<uint8_t> &buffer,
                      std::string &src_mac_address,
@@ -28,11 +29,22 @@ void get_mac_address(const std::vector<uint8_t> &buffer,
   }
 }
 
-void get_ipv4_address(const uint32_t *buffer, std::string &ip_str) {
-  ip_str = std::to_string((buffer[0] >> 24) & 0xFF) + "." +
-           std::to_string((buffer[0] >> 16) & 0xFF) + "." +
-           std::to_string((buffer[0] >> 8) & 0xff) + "." +
-           std::to_string(buffer[0] & 0xFF);
+/// This function extracts the IPv4 address from the given buffer and converts
+/// it to a string format. The function takes a pointer to the buffer containing
+/// Parameters:
+/// buffer: uint8_t pointer to the buffer containin the frame
+/// ip_str: reference to a string where the extracted IP address will be stored
+void get_ipv4_address(const uint8_t *buffer, std::string &src_ip_str,
+                      std::string &dst_ip_str) {
+  src_ip_str = std::to_string((int)(buffer[26])) + "." +
+               std::to_string(((int)buffer[27])) + "." +
+               std::to_string(((int)buffer[28])) + "." +
+               std::to_string((int)buffer[29]);
+
+  dst_ip_str = std::to_string((int)(buffer[30])) + "." +
+               std::to_string(((int)buffer[31])) + "." +
+               std::to_string(((int)buffer[32])) + "." +
+               std::to_string((int)buffer[33]);
 }
 
 /// This function extracts the source and destination MAC addresses, source
@@ -54,30 +66,35 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
   }
   std::cout << std::dec << "end of packet" << std::endl;
 
-  std::cout << "the ipv4 header (next 20 bytes): ";
-  for (int i = 0; i <= 19; i++) {
-    std::cout << (int)buffer[i + 14] << " ";
-  }
-  std::cout << "the ip src is:" << std::endl;
-  std::cout << (int)buffer[26] << "." << (int)buffer[27] << "."
-            << (int)buffer[28] << "." << (int)buffer[29] << std::endl;
   if (buffer.size() < 20) {
     throw std::runtime_error("Packet too small to contain IP .");
   }
+  if (buffer[12] == 0x08 || buffer[13] == 0x00) {
 
-  if ((buffer[12] != 0x08 || buffer[13] != 0x00) &&
-      (buffer[12] != 0x86 || buffer[13] != 0xdd)) {
+    std::cout << std::endl;
+    std::cout << "<============= new IPv4 packet detected. =================>"
+              << std::endl;
+
+    std::cout << "the ipv4 header (next 20 bytes): ";
+    for (int i = 0; i <= 19; i++) {
+      std::cout << (int)buffer[i + 14] << " ";
+    }
+
     std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
               << (int)buffer[13] << std::dec << std::endl;
+
+    get_mac_address(buffer, src_mac, dst_mac);
+    get_ipv4_address(((uint8_t *)buffer.data()), src_ip, dst_ip);
+    src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
+    dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
+    payload = std::string(buffer.begin() + 28, buffer.end());
+
+  } else if (buffer[12] == 0x80 && buffer[13] == 0x06) {
+    std::cout << "Ethernet type: ARP" << std::endl;
   } else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
     throw std::runtime_error("Vlan tagged packet, not supported yet.:)");
+  } else if ((buffer[12] == 0x86 || buffer[13] == 0xdd)) {
+    throw std::runtime_error(
+        "Not an IPv4 packet. IPv6 is not supported yet.:)");
   }
-
-  // getting the mac address
-  get_mac_address(buffer, src_mac, dst_mac);
-  get_ipv4_address((uint32_t *)((uint32_t *)buffer.data() + 26), src_ip);
-  get_ipv4_address((uint32_t *)((uint32_t *)buffer.data() + 30), dst_ip);
-  src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
-  dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
-  payload = std::string(buffer.begin() + 28, buffer.end());
 }
