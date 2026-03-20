@@ -1,8 +1,7 @@
 #include <../include/rawsock.h>
-#include <netinet/in.h>
 
-void RawSocket::open_raw_socket() {
-  this->sockfd_ = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+void RawSocket::open_raw_socket(int domain, int protocol) {
+  this->sockfd_ = socket((domain), SOCK_RAW, protocol);
   std::cout << "Socket FD: " << this->sockfd_ << std::endl;
   if (this->sockfd_ < 0) {
     throw std::runtime_error("Socket creation failed");
@@ -26,5 +25,78 @@ void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len) {
 
   if (bytes_sent < 0) {
     throw std::runtime_error("Failed to send packet");
+  }
+}
+
+void RawSocket::sniff_packets(std::string interface_name) {
+
+  sockaddr_ll socket_address{};
+  socket_address.sll_family = AF_PACKET;
+  socket_address.sll_protocol = htons(ETH_P_ALL);
+  socket_address.sll_ifindex = if_nametoindex(interface_name.c_str());
+  if (socket_address.sll_ifindex == 0) {
+    throw std::runtime_error("Interface not found: " + interface_name);
+  }
+
+  socket_address.sll_ifindex = if_nametoindex(interface_name.c_str());
+
+  this->open_raw_socket(AF_PACKET, ETH_P_ALL);
+
+  if (bind(this->sockfd_, reinterpret_cast<sockaddr *>(&socket_address),
+           sizeof(socket_address)) < 0) {
+    std::cout << "the error is :" << errno << std::endl;
+    throw std::runtime_error(
+        "Failed to bind socket to interface: " + interface_name + "\n" +
+        std::to_string(this->sockfd_));
+  }
+
+  packet_mreq mreq{};
+  mreq.mr_ifindex = socket_address.sll_ifindex;
+  mreq.mr_type = PACKET_MR_PROMISC;
+  if (setsockopt(this->sockfd_, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq,
+                 sizeof(mreq)) < 0) {
+    throw std::runtime_error("Failed to set promiscuous mode");
+  }
+
+  std::cout << "ifindex=" << socket_address.sll_ifindex
+            << " sll_protocol(host)=" << ntohs(socket_address.sll_protocol)
+            << std::endl;
+
+  std::cout << "Sniffing on interface: " << interface_name << std::endl;
+  while (true) {
+    std::vector<uint8_t> buffer(65536);
+
+    ssize_t num_bytes = recvfrom(this->sockfd_, buffer.data(), buffer.size(), 0,
+                                 nullptr, nullptr);
+
+    if (num_bytes < 0) {
+      throw std::runtime_error("Failed to receive packet");
+    }
+    std::string src_mac, dst_mac, src_ip, dst_ip, payload;
+    uint16_t src_port, dst_port;
+    uint8_t protocol;
+
+    get_mac_address(buffer, src_mac, dst_mac);
+    get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port,
+                    dst_port, payload, protocol);
+
+    if (src_mac == "6c:f6:da:82:48:cb") {
+      std::cout << "Received packet: " << num_bytes << " bytes " << std::endl;
+      std::cout << "Src Mac:" << src_mac << std::endl;
+      std::cout << "Dst Mac: " << dst_mac << std::endl;
+      std::cout << "Src IP: " << src_ip << std::endl;
+      std::cout << "Dst IP: " << dst_ip << std::endl;
+      std::cout << "Src Port: " << src_port << std::endl;
+      std::cout << "Dst Port: " << dst_port << std::endl;
+      std::cout << "Protocol: " << (int)protocol << std::endl;
+      std::cout << "Payload: " << payload << std::endl;
+    }
+
+    std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac
+              << std::endl;
+    std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
+              << ", Src Port: " << src_port << ", Dst Port: " << dst_port
+              << ", Protocol: " << (int)protocol << ", Payload: " << payload
+              << std::endl;
   }
 }
