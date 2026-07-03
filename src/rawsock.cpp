@@ -1,4 +1,7 @@
+#include "packet_detail.h"
 #include <../include/rawsock.h>
+#include <cstddef>
+#include <sys/socket.h>
 
 void RawSocket::open_raw_socket(int domain, int protocol) {
   this->sockfd_ = socket((domain), SOCK_RAW, protocol);
@@ -28,7 +31,15 @@ void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len) {
   }
 }
 
-void RawSocket::sniff_packets(std::string interface_name) {
+/// This function is for ensuring a raw socket is created for sniffing. if not
+/// it will creat it Params: interface_name: the name of the interface tmmsghdro
+/// sniff on.
+void RawSocket::ensure_socket(const std::string &interface_name) {
+  if (this->sockfd_ > 0) {
+    return;
+  }
+
+  this->open_raw_socket(AF_PACKET, ETH_P_ALL);
 
   sockaddr_ll socket_address{};
   socket_address.sll_family = AF_PACKET;
@@ -61,42 +72,88 @@ void RawSocket::sniff_packets(std::string interface_name) {
   std::cout << "ifindex=" << socket_address.sll_ifindex
             << " sll_protocol(host)=" << ntohs(socket_address.sll_protocol)
             << std::endl;
+}
 
-  std::cout << "Sniffing on interface: " << interface_name << std::endl;
-  while (true) {
-    std::vector<uint8_t> buffer(65536);
+int RawSocket::sniff_packets_batch(const std::string &interface_name,
+                                   std::vector<std::vector<uint8_t>> &packets,
+                                   unsigned int batch_size,
+                                   unsigned int timeout_ms) {
+  ensure_socket(interface_name);
+  timespec time_out{};
+  std::vector<std::vector<uint8_t>> buffers(batch_size);
 
-    ssize_t num_bytes = recvfrom(this->sockfd_, buffer.data(), buffer.size(), 0,
-                                 nullptr, nullptr);
-
-    if (num_bytes < 0) {
-      throw std::runtime_error("Failed to receive packet");
-    }
-    std::string src_mac, dst_mac, src_ip, dst_ip, payload;
-    uint16_t src_port, dst_port;
-    uint8_t protocol;
-
-    get_mac_address(buffer, src_mac, dst_mac);
-    get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port,
-                    dst_port, payload, protocol);
-
-    if (src_mac == "6c:f6:da:82:48:cb") {
-      std::cout << "Received packet: " << num_bytes << " bytes " << std::endl;
-      std::cout << "Src Mac:" << src_mac << std::endl;
-      std::cout << "Dst Mac: " << dst_mac << std::endl;
-      std::cout << "Src IP: " << src_ip << std::endl;
-      std::cout << "Dst IP: " << dst_ip << std::endl;
-      std::cout << "Src Port: " << src_port << std::endl;
-      std::cout << "Dst Port: " << dst_port << std::endl;
-      std::cout << "Protocol: " << (int)protocol << std::endl;
-      std::cout << "Payload: " << payload << std::endl;
-    }
-
-    std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac
-              << std::endl;
-    std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
-              << ", Src Port: " << src_port << ", Dst Port: " << dst_port
-              << ", Protocol: " << (int)protocol << ", Payload: " << payload
-              << std::endl;
+  time_out.tv_sec = timeout_ms / 1000;
+  time_out.tv_nsec = (timeout_ms % 1000) * 1000000;
+  if (packets.size() < batch_size) {
+    packets.resize(batch_size);
   }
+  for (size_t i = 0; i < batch_size; ++i) {
+    // Ensure the vector has enough internal capacity for a max Ethernet frame
+    if (packets[i].capacity() < 65536) {
+      packets[i].reserve(65536);
+    }
+    // Temporarily set size to maximum so the kernel has room to write
+    packets[i].resize(65536);
+  }
+
+  std::vector<iovec> iov(batch_size);
+  std::vector<mmsghdr> msgs(batch_size);
+  std::memset(msgs.data(), 0, sizeof(mmsghdr) * batch_size);
+
+  for (size_t i = 0; i < batch_size; i++) {
+    iov[i].iov_base = packets[i].data();
+    iov[i].iov_len = packets[i].size();
+
+    msgs[i].msg_hdr.msg_iov = &iov[i];
+    msgs[i].msg_hdr.msg_iovlen = 1;
+  }
+
+  std::cout << "Sniffing on interface in batch: " << interface_name
+            << std::endl;
+  int n = 0;
+  n = recvmmsg(this->sockfd_, msgs.data(), batch_size, 0, &time_out) > 0 ? n
+                                                                         : 0;
+  std::cout << "Number of packets received: " << n << std::endl;
+  if (n <= 0) {
+    return 0;
+  }
+
+  for (int i = 0; i < n; i++) {
+    packets[i].resize(msgs[i].msg_len);
+  }
+
+  return n;
+}
+
+int RawSocket::sniff_packets(const std::string &interface_name,
+                             std::vector<uint8_t> &buffer) {
+  ensure_socket(interface_name);
+  std::cout << "Sniffing on interface: " << interface_name << std::endl;
+
+  ssize_t num_bytes = recvfrom(this->sockfd_, buffer.data(), buffer.size(), 0,
+                               nullptr, nullptr);
+  if (num_bytes < 0) {
+    throw std::runtime_error("Failed to receive packet");
+  }
+  buffer.resize(num_bytes);
+  std::string src_mac, dst_mac, src_ip, dst_ip, payload;
+  uint16_t src_port, dst_port;
+  uint8_t protocol;
+
+  FrameType frameType = get_frame_type(buffer);
+  if (frameType != FrameType::IPv4) {
+
+    std::cout << "Non-IPv4 packet received, skipping..." << std::endl;
+    return 0;
+  }
+
+  get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port,
+                  payload, protocol);
+
+  std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac << std::endl;
+  std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
+            << ", Src Port: " << src_port << ", Dst Port: " << dst_port
+            << ", Protocol: " << (int)protocol << ", Payload: " << payload
+            << std::endl;
+  return 1;
 }

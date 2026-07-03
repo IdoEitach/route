@@ -47,6 +47,27 @@ void get_ipv4_address(const uint8_t *buffer, std::string &src_ip_str,
                std::to_string((int)buffer[33]);
 }
 
+FrameType get_frame_type(const std::vector<uint8_t> &buffer) {
+  if (buffer.size() < 14) {
+    throw std::runtime_error("Packet too small to contain Ethernet header.");
+  }
+
+  uint16_t eth_type = (uint16_t)(buffer[12] << 8) | (uint16_t)buffer[13];
+
+  switch (eth_type) {
+  case 0x0800:
+    return FrameType::IPv4;
+  case 0x0806:
+    return FrameType::ARP;
+  case 0x8100:
+    return FrameType::VLAN;
+  case 0x86DD:
+    return FrameType::IPv6;
+  default:
+    return FrameType::Unknown;
+  }
+}
+
 /// This function extracts the source and destination MAC addresses, source
 /// and Params: destination IP addresses, source and destination ports,
 /// payload, protocol Expexcptions:
@@ -60,15 +81,10 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
                      std::string &dst_ip, uint16_t &src_port,
                      uint16_t &dst_port, std::string &payload,
                      uint8_t &protocol) {
-  std::cout << "frame data (first 14 bytes): ";
-  for (int i = 0; i < 14; i++) {
-    std::cout << std::hex << (int)buffer[i] << " ";
-  }
-  std::cout << std::dec << "end of packet" << std::endl;
-
   if (buffer.size() < 20) {
     throw std::runtime_error("Packet too small to contain IP .");
   }
+  // handle the case of ipv4 packet
   if (buffer[12] == 0x08 || buffer[13] == 0x00) {
 
     std::cout << std::endl;
@@ -79,21 +95,25 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
     for (int i = 0; i <= 19; i++) {
       std::cout << (int)buffer[i + 14] << " ";
     }
-
     std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
               << (int)buffer[13] << std::dec << std::endl;
-
     get_mac_address(buffer, src_mac, dst_mac);
     get_ipv4_address(((uint8_t *)buffer.data()), src_ip, dst_ip);
     src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
     dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
     payload = std::string(buffer.begin() + 28, buffer.end());
 
-  } else if (buffer[12] == 0x80 && buffer[13] == 0x06) {
+  }
+  // handle the case of arp packet
+  else if (buffer[12] == 0x80 && buffer[13] == 0x06) {
     std::cout << "Ethernet type: ARP" << std::endl;
-  } else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
+  }
+  // handle the case of vlan tagged packet
+  else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
     throw std::runtime_error("Vlan tagged packet, not supported yet.:)");
-  } else if ((buffer[12] == 0x86 || buffer[13] == 0xdd)) {
+  }
+  // handle the case of ipv6 packet
+  else if ((buffer[12] == 0x86 || buffer[13] == 0xdd)) {
     throw std::runtime_error(
         "Not an IPv4 packet. IPv6 is not supported yet.:)");
   }

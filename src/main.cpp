@@ -12,6 +12,9 @@ int main() {
   const std::string dst_ip = "10.100.102.13";
   uint16_t src_port = 12345;
   uint16_t dst_port = 55555;
+  constexpr unsigned int BATCH_SIZE = 10;
+  constexpr unsigned int TIMEOUT_MS = 10000;
+  std::vector<std::vector<uint8_t>> packet_batch;
 
   const std::string payload = "Hello, UDP!";
 
@@ -43,8 +46,26 @@ int main() {
     return EXIT_FAILURE;
   }
   RawSocket sniffer_socket = RawSocket();
+  std::string interface_name = "wlp1s0";
+  std::vector<uint8_t> buffer(65536);
   try {
-    sniffer_socket.sniff_packets("wlp1s0");
+    int packets_received = sniffer_socket.sniff_packets_batch(
+        interface_name, packet_batch, BATCH_SIZE, TIMEOUT_MS);
+    if (packets_received <= 0) {
+      std::cout << "No packets received in the batch." << std::endl;
+      return EXIT_SUCCESS;
+    }
+    for (int i = 0; i < packets_received; ++i) {
+      std::cout << "Packet " << i + 1
+                << " received, size: " << packet_batch[i].size() << " bytes"
+                << std::endl;
+      try {
+        print_packet(packet_batch[i]);
+      } catch (std::invalid_argument &e) {
+        std::cerr << "Error printing packet: " << e.what() << std::endl;
+      }
+    }
+
   } catch (const std::exception &e) {
     std::cerr << "Error sniffing packets: " << e.what() << std::endl;
   }
