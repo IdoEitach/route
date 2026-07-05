@@ -111,10 +111,9 @@ int RawSocket::sniff_packets_batch(const std::string &interface_name,
   std::cout << "Sniffing on interface in batch: " << interface_name
             << std::endl;
   int n = 0;
-  n = recvmmsg(this->sockfd_, msgs.data(), batch_size, 0, &time_out) > 0 ? n
-                                                                         : 0;
-  std::cout << "Number of packets received: " << n << std::endl;
+  n = recvmmsg(this->sockfd_, msgs.data(), batch_size, 0, &time_out);
   if (n <= 0) {
+    std::cout << "No packets received in the batch." << std::endl;
     return 0;
   }
 
