@@ -49,12 +49,14 @@ int main() {
   RawSocket sniffer_socket = RawSocket();
   std::string interface_name = "wlp1s0";
   std::vector<uint8_t> buffer(65536);
+
   try {
-    try {
-      sniffer_socket.ensure_socket(interface_name);
-    } catch (const std::exception &e) {
-      std::cerr << "Error ensuring socket: " << e.what() << std::endl;
-    }
+    sniffer_socket.ensure_socket(interface_name);
+  } catch (const std::exception &e) {
+    std::cerr << "Error ensuring socket: " << e.what() << std::endl;
+  }
+  for (int i = 0; i < 1000; i++) {
+
     int packets_received = sniffer_socket.sniff_packets_batch(
         interface_name, packet_batch, BATCH_SIZE, TIMEOUT_MS);
     if (packets_received <= 0) {
@@ -62,20 +64,32 @@ int main() {
       return EXIT_SUCCESS;
     }
     for (int i = 0; i < packets_received; ++i) {
-      std::cout << "Packet " << i + 1
-                << " received, size: " << packet_batch[i].data() << " bytes"
-                << std::endl;
-      get_packet_data(packet_batch[i], src_mac_sniff, dst_mac_sniff,
-                      src_ip_sniff, dst_ip_sniff, src_port_sniff,
-                      dst_port_sniff, payload_sniff, protocol_sniff);
       try {
-        std::cout << "Packet " << i + 1 << " content: ";
-      } catch (std::invalid_argument &e) {
-        std::cerr << "Error printing packet: " << e.what() << std::endl;
+        get_packet_data(packet_batch[i], src_mac_sniff, dst_mac_sniff,
+                        src_ip_sniff, dst_ip_sniff, src_port_sniff,
+                        dst_port_sniff, payload_sniff, protocol_sniff);
+        std::cout << "Src Mac: " << src_mac_sniff
+                  << ", Dst Mac: " << dst_mac_sniff << std::endl;
+        std::cout << "Src IP: " << src_ip_sniff << ", Dst IP: " << dst_ip_sniff
+                  << ", Src Port: " << src_port_sniff
+                  << ", Dst Port: " << dst_port_sniff
+                  << ", Protocol: " << (int)protocol_sniff
+                  << ", Payload: " << payload_sniff << std::endl;
+        src_ip_sniff.clear();
+        dst_ip_sniff.clear();
+        payload_sniff.clear();
+        src_mac_sniff.clear();
+        dst_mac_sniff.clear();
+        src_port_sniff = 0;
+        dst_port_sniff = 0;
+
+      } catch (const std::runtime_error &e) {
+        std::cerr << "Runtime error sniffing packets: " << e.what()
+                  << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "Error sniffing packets: " << e.what() << std::endl;
       }
     }
-  } catch (const std::exception &e) {
-    std::cerr << "Error sniffing packets: " << e.what() << std::endl;
   }
   std::cout << "well its done" << std::endl;
   return 0;

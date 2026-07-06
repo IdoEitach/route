@@ -1,5 +1,5 @@
 #include "../include/packet_detail.h"
-#include <cstdint>
+#include <format>
 
 void get_mac_address(const std::vector<uint8_t> &buffer,
                      std::string &src_mac_address,
@@ -84,8 +84,17 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
   if (buffer.size() < 20) {
     throw std::runtime_error("Packet too small to contain IP .");
   }
+  if (buffer[12] < 0x06) { //
+    // means its snap/llc packet, we will not handle it for now
+    std::cout << std::endl;
+    std::cout << "<============= new SNAP/LLC packet detected "
+              << "=================>" << std::endl;
+
+    throw std::runtime_error(
+        "Not an IPv4 packet. SNAP/LLC is not supported yet.:)");
+  }
   // handle the case of ipv4 packet
-  if (buffer[12] == 0x08 || buffer[13] == 0x00) {
+  else if (buffer[12] == 0x08 && buffer[13] == 0x00) {
 
     std::cout << std::endl;
     std::cout << "<============= new IPv4 packet detected. =================>"
@@ -105,8 +114,10 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
 
   }
   // handle the case of arp packet
-  else if (buffer[12] == 0x80 && buffer[13] == 0x06) {
-    std::cout << "Ethernet type: ARP" << std::endl;
+  else if (buffer[12] == 0x08 && buffer[13] == 0x06) {
+    std::cout << std::endl;
+    std::cout << "<============= new ARP packet detected. =================>";
+    get_mac_address(buffer, src_mac, dst_mac);
   }
   // handle the case of vlan tagged packet
   else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
@@ -116,5 +127,14 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
   else if ((buffer[12] == 0x86 || buffer[13] == 0xdd)) {
     throw std::runtime_error(
         "Not an IPv4 packet. IPv6 is not supported yet.:)");
+  }
+  // handle the case of unknown packet type
+  else {
+    std::ostringstream ss;
+    ss << "Unknown packet type. Ethernet type: 0x" << std::hex
+       << std::setfill('0') << std::setw(2) << static_cast<int>(buffer[12])
+       << std::setfill('0') << std::setw(2) << static_cast<int>(buffer[13]);
+
+    throw std::runtime_error(ss.str());
   }
 }
