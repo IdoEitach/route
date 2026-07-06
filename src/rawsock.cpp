@@ -51,8 +51,6 @@ void RawSocket::ensure_socket(const std::string &interface_name) {
 
   socket_address.sll_ifindex = if_nametoindex(interface_name.c_str());
 
-  this->open_raw_socket(AF_PACKET, ETH_P_ALL);
-
   if (bind(this->sockfd_, reinterpret_cast<sockaddr *>(&socket_address),
            sizeof(socket_address)) < 0) {
     std::cout << "the error is :" << errno << std::endl;
@@ -107,10 +105,11 @@ int RawSocket::sniff_packets_batch(const std::string &interface_name,
     msgs[i].msg_hdr.msg_iov = &iov[i];
     msgs[i].msg_hdr.msg_iovlen = 1;
   }
-
-  std::cout << "Sniffing on interface in batch: " << interface_name
-            << std::endl;
+  //
+  // std::cout << "Sniffing on interface in batch: " << interface_name
+  //           << std::endl;
   int n = 0;
+
   n = recvmmsg(this->sockfd_, msgs.data(), batch_size, 0, &time_out);
   if (n <= 0) {
     std::cout << "No packets received in the batch." << std::endl;

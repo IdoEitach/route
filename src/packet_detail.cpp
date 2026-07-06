@@ -86,9 +86,9 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
   }
   if (buffer[12] < 0x06) { //
     // means its snap/llc packet, we will not handle it for now
-    std::cout << std::endl;
-    std::cout << "<============= new SNAP/LLC packet detected "
-              << "=================>" << std::endl;
+    // std::cout << std::endl;
+    // std::cout << "<============= new SNAP/LLC packet detected "
+    //           << "=================>" << std::endl;
 
     throw std::runtime_error(
         "Not an IPv4 packet. SNAP/LLC is not supported yet.:)");
@@ -96,16 +96,17 @@ void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
   // handle the case of ipv4 packet
   else if (buffer[12] == 0x08 && buffer[13] == 0x00) {
 
-    std::cout << std::endl;
-    std::cout << "<============= new IPv4 packet detected. =================>"
-              << std::endl;
-
-    std::cout << "the ipv4 header (next 20 bytes): ";
-    for (int i = 0; i <= 19; i++) {
-      std::cout << (int)buffer[i + 14] << " ";
-    }
-    std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
-              << (int)buffer[13] << std::dec << std::endl;
+    // std::cout << std::endl;
+    // std::cout << "<============= new IPv4 packet detected.
+    // =================>"
+    //           << std::endl;
+    //
+    // std::cout << "the ipv4 header (next 20 bytes): ";
+    // for (int i = 0; i <= 19; i++) {
+    //   std::cout << (int)buffer[i + 14] << " ";
+    // }
+    // std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
+    // << (int)buffer[13] << std::dec << std::endl;
     get_mac_address(buffer, src_mac, dst_mac);
     get_ipv4_address(((uint8_t *)buffer.data()), src_ip, dst_ip);
     src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
