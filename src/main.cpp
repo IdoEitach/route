@@ -1,3 +1,4 @@
+#include "../include/packet_batch.h"
 #include "../include/packet_builder.h"
 #include "../include/rawsock.h"
 #include <iostream>
@@ -5,6 +6,74 @@
 #include <sys/socket.h>
 // #include "forward.h"
 #include "../include/hash_table.h"
+#include "../include/safe_queue.h"
+
+void sniff_thread(RawSocket &sniffer_socket, const std::string &interface_name,
+                  SafeQueue<PacketBatch *> &empty_queue,
+                  SafeQueue<PacketBatch *> &to_process_queue) {
+  while (true) {
+    PacketBatch *batch = empty_queue.pop();
+    int n = sniffer_socket.sniff_packets_batch(interface_name, *batch, 10000);
+    if (n > 0) {
+      to_process_queue.push(batch);
+    } else {
+      empty_queue.push(batch); // Return the batch to the empty queue if no
+    }
+  }
+}
+
+void process_thread(SafeQueue<PacketBatch *> &to_process_queue,
+                    SafeQueue<PacketBatch *> &to_send_queue) {
+  while (true) {
+    PacketBatch packet_batch = nullptr;
+    packet_batch = to_process_queue.pop();
+
+    for (int i = 0; i < packet_batch.packets_received; ++i) {
+      std::string src_mac, dst_mac, src_ip, dst_ip, payload;
+      uint16_t src_port, dst_port;
+      uint8_t protocol;
+
+      try {
+        get_packet_data(packet_batch.packets[i], src_mac, dst_mac, src_ip,
+                        dst_ip, src_port, dst_port, payload, protocol);
+
+        std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac
+                  << std::endl;
+        std::cout << "Src IP: " << src_ip << ", Dst IP: " << dst_ip
+                  << ", Src Port: " << src_port << ", Dst Port: " << dst_port
+                  << ", Protocol: " << (int)protocol << ", Payload: " << payload
+                  << std::endl;
+        to_send_queue.push(&packet_batch);
+
+      } catch (const std::runtime_error &e) {
+        std::cerr << "Runtime error processing packets: " << e.what()
+                  << std::endl;
+
+      } catch (const std::exception &e) {
+        std::cerr << "Error processing packets: " << e.what() << std::endl;
+      }
+    }
+  }
+}
+
+void send_thread(RawSocket &rawsocket, string &interface_name,
+                 SafeQueue<PacketBatch> &to_send_queue,
+                 SafeQueue<PacketBatch> &empty_queue) {
+  while (true) {
+    PacketBatch packet_batch(10);
+    full_queue.pop(packet_batch);
+
+    for (int i = 0; i < packet_batch.packets_received; ++i) {
+      try {
+        rawsocket.send_raw_packet(packet_batch.packets[i].data(),
+                                  packet_batch.packets[i].size());
+        std::cout << "Packet sent successfully!" << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "Error sending packet: " << e.what() << std::endl;
+      }
+    }
+  }
+}
 
 int main() {
 
@@ -22,6 +91,9 @@ int main() {
   std::string src_mac_sniff, dst_mac_sniff;
   uint16_t src_port_sniff, dst_port_sniff;
   uint8_t protocol_sniff;
+
+  SafeQueue<PacketBatch> empty_queue;
+  SafeQueue<PacketBatch> full_queue;
 
   std::vector<uint8_t> packet =
       build_udp_packet(src_ip, src_port, dst_ip, dst_port, payload, 255);

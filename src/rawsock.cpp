@@ -10,7 +10,8 @@ void RawSocket::open_raw_socket(int domain, int protocol) {
     throw std::runtime_error("Socket creation failed");
   }
 }
-
+void Rawsocket::send_raw_packet_batch(
+    const std::vector<std::vector<uint8_t>> &packets) {}
 void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len) {
   // Implementation of sending raw packet goes here
   std::string dest_ip =
@@ -73,52 +74,25 @@ void RawSocket::ensure_socket(const std::string &interface_name) {
 }
 
 int RawSocket::sniff_packets_batch(const std::string &interface_name,
-                                   std::vector<std::vector<uint8_t>> &packets,
-                                   unsigned int batch_size,
+                                   PacketBatch &packet_batch,
                                    unsigned int timeout_ms) {
   ensure_socket(interface_name);
   timespec time_out{};
-  std::vector<std::vector<uint8_t>> buffers(batch_size);
-
   time_out.tv_sec = timeout_ms / 1000;
   time_out.tv_nsec = (timeout_ms % 1000) * 1000000;
-  if (packets.size() < batch_size) {
-    packets.resize(batch_size);
-  }
-  for (size_t i = 0; i < batch_size; ++i) {
-    // Ensure the vector has enough internal capacity for a max Ethernet frame
-    if (packets[i].capacity() < 65536) {
-      packets[i].reserve(65536);
-    }
-    // Temporarily set size to maximum so the kernel has room to write
-    packets[i].resize(65536);
-  }
-
-  std::vector<iovec> iov(batch_size);
-  std::vector<mmsghdr> msgs(batch_size);
-  std::memset(msgs.data(), 0, sizeof(mmsghdr) * batch_size);
-
-  for (size_t i = 0; i < batch_size; i++) {
-    iov[i].iov_base = packets[i].data();
-    iov[i].iov_len = packets[i].size();
-
-    msgs[i].msg_hdr.msg_iov = &iov[i];
-    msgs[i].msg_hdr.msg_iovlen = 1;
-  }
-  //
+  packet_batch.reset_for_recv(65536);
   // std::cout << "Sniffing on interface in batch: " << interface_name
   //           << std::endl;
   int n = 0;
 
-  n = recvmmsg(this->sockfd_, msgs.data(), batch_size, 0, &time_out);
+  n = recvmmsg(this->sockfd_, packet_batch.msgs.data(), packet_batch.batch_size,
+               0, &time_out);
   if (n <= 0) {
     std::cout << "No packets received in the batch." << std::endl;
     return 0;
   }
 
-  for (int i = 0; i < n; i++) {
-    packets[i].resize(msgs[i].msg_len);
-  }
+  packet_batch.packets_received = n;
 
   return n;
 }

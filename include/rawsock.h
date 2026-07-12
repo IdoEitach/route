@@ -1,5 +1,6 @@
 #pragma once
 
+#include "packet_batch.h"
 #include "packet_builder.h"
 #include "packet_detail.h"
 #include <arpa/inet.h>
@@ -26,11 +27,12 @@ public:
   RawSocket &operator=(const RawSocket &) = delete;
 
   void open_raw_socket(int domain = AF_INET, int protocol = IPPROTO_RAW);
+  void send_raw_packet_batch(const std::string &interface_name,
+                             const std::vector<std::vector<uint8_t>> &packets);
   void send_raw_packet(const uint8_t *packet, size_t packet_len);
 
   int sniff_packets_batch(const std::string &interface_name,
-                          std::vector<std::vector<uint8_t>> &packets,
-                          unsigned int batch_size, unsigned int timeout_ms);
+                          PacketBatch &packet_batch, unsigned int timeout_ms);
 
   int sniff_packets(const std::string &interface_name,
                     std::vector<uint8_t> &buffer);
