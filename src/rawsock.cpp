@@ -1,6 +1,7 @@
 #include "packet_detail.h"
 #include <../include/rawsock.h>
 #include <cstddef>
+#include <string>
 #include <sys/socket.h>
 
 void RawSocket::open_raw_socket(int domain, int protocol) {
@@ -10,28 +11,29 @@ void RawSocket::open_raw_socket(int domain, int protocol) {
     throw std::runtime_error("Socket creation failed");
   }
 }
-void Rawsocket::send_raw_packet_batch(
-    const std::vector<std::vector<uint8_t>> &packets) {}
-void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len) {
-  // Implementation of sending raw packet goes here
-  std::string dest_ip =
-      std::to_string(packet[16]) + "." + std::to_string(packet[17]) + "." +
-      std::to_string(packet[18]) + "." + std::to_string(packet[19]);
-  std::uint16_t dest_port = (*(uint16_t *)(packet + 22));
 
-  struct sockaddr_in dst;
-  dst.sin_family = AF_INET;
-  dst.sin_port = htons(dest_port);
-  dst.sin_addr.s_addr = inet_addr(dest_ip.c_str());
+void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len,
+                                const std::string &interface_name) {
+
+  ensure_socket(interface_name);
+
+  struct sockaddr_ll loc_addr = {};
+  loc_addr.sll_family = AF_PACKET;
+  loc_addr.sll_ifindex = if_nametoindex(interface_name.c_str());
+  loc_addr.sll_halen = ETH_ALEN;
+
+  // The first 6 bytes of an Ethernet frame are the destination MAC address
+  std::memcpy(loc_addr.sll_addr, packet, 6);
 
   ssize_t bytes_sent = sendto(this->sockfd_, packet, packet_len, 0,
-                              (struct sockaddr *)&dst, sizeof(dst));
+                              (struct sockaddr *)&loc_addr, sizeof(loc_addr));
 
   if (bytes_sent < 0) {
-    throw std::runtime_error("Failed to send packet");
+    throw std::runtime_error("Failed to send packet from socket fd " +
+                             std::to_string(this->sockfd_) +
+                             " | Error: " + std::strerror(errno));
   }
 }
-
 /// This function is for ensuring a raw socket is created for sniffing. if not
 /// it will creat it Params: interface_name: the name of the interface tmmsghdro
 /// sniff on.
@@ -89,6 +91,7 @@ int RawSocket::sniff_packets_batch(const std::string &interface_name,
                0, &time_out);
   if (n <= 0) {
     std::cout << "No packets received in the batch." << std::endl;
+
     return 0;
   }
 
@@ -119,13 +122,5 @@ int RawSocket::sniff_packets(const std::string &interface_name,
     return 0;
   }
 
-  get_packet_data(buffer, src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port,
-                  payload, protocol);
-
-  std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac << std::endl;
-  std::cout << "Src IP: " << src_ip << ",Dst IP: " << dst_ip
-            << ", Src Port: " << src_port << ", Dst Port: " << dst_port
-            << ", Protocol: " << (int)protocol << ", Payload: " << payload
-            << std::endl;
   return 1;
 }

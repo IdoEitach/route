@@ -20,6 +20,7 @@
 
 class RawSocket {
 public:
+  int sockfd_;
   RawSocket() : sockfd_(-1) {}
   ~RawSocket() = default;
 
@@ -27,9 +28,8 @@ public:
   RawSocket &operator=(const RawSocket &) = delete;
 
   void open_raw_socket(int domain = AF_INET, int protocol = IPPROTO_RAW);
-  void send_raw_packet_batch(const std::string &interface_name,
-                             const std::vector<std::vector<uint8_t>> &packets);
-  void send_raw_packet(const uint8_t *packet, size_t packet_len);
+  void send_raw_packet(const uint8_t *packet, size_t packet_len,
+                       const std::string &interface_name);
 
   int sniff_packets_batch(const std::string &interface_name,
                           PacketBatch &packet_batch, unsigned int timeout_ms);
@@ -39,6 +39,5 @@ public:
   void ensure_socket(const std::string &interface_name);
 
 private:
-  int sockfd_;
   std::string interface_name_;
 };

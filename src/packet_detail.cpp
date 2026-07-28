@@ -1,58 +1,24 @@
 #include "../include/packet_detail.h"
-#include <format>
+#include <arpa/inet.h>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
 
-void get_mac_address(const std::vector<uint8_t> &buffer,
-                     std::string &src_mac_address,
-                     std::string &dst_mac_address) {
+std::string string_to_hex(std::span<const uint8_t> input) {
+  std::ostringstream ss;
+  for (uint8_t c : input) {
+    ss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(c)
+       << " ";
+  }
+  return ss.str();
+}
+
+FrameType get_frame_type(std::span<const uint8_t> buffer) {
   if (buffer.size() < 14) {
     throw std::runtime_error("Packet too small to contain Ethernet header.");
   }
 
-  src_mac_address.clear();
-  dst_mac_address.clear();
-
-  std::ostringstream oss;
-
-  for (int i = 0; i < 6; ++i) {
-    if (i > 0)
-      dst_mac_address += ":";
-    oss.str("");
-    oss << std::hex << static_cast<int>(buffer[i]);
-    dst_mac_address += oss.str();
-  }
-  for (int i = 6; i < 12; ++i) {
-    if (i > 6)
-      src_mac_address += ":";
-    oss.str("");
-    oss << std::hex << static_cast<int>(buffer[i]);
-    src_mac_address += oss.str();
-  }
-}
-
-/// This function extracts the IPv4 address from the given buffer and converts
-/// it to a string format. The function takes a pointer to the buffer containing
-/// Parameters:
-/// buffer: uint8_t pointer to the buffer containin the frame
-/// ip_str: reference to a string where the extracted IP address will be stored
-void get_ipv4_address(const uint8_t *buffer, std::string &src_ip_str,
-                      std::string &dst_ip_str) {
-  src_ip_str = std::to_string((int)(buffer[26])) + "." +
-               std::to_string(((int)buffer[27])) + "." +
-               std::to_string(((int)buffer[28])) + "." +
-               std::to_string((int)buffer[29]);
-
-  dst_ip_str = std::to_string((int)(buffer[30])) + "." +
-               std::to_string(((int)buffer[31])) + "." +
-               std::to_string(((int)buffer[32])) + "." +
-               std::to_string((int)buffer[33]);
-}
-
-FrameType get_frame_type(const std::vector<uint8_t> &buffer) {
-  if (buffer.size() < 14) {
-    throw std::runtime_error("Packet too small to contain Ethernet header.");
-  }
-
-  uint16_t eth_type = (uint16_t)(buffer[12] << 8) | (uint16_t)buffer[13];
+  uint16_t eth_type = (static_cast<uint16_t>(buffer[12]) << 8) | buffer[13];
 
   switch (eth_type) {
   case 0x0800:
@@ -68,74 +34,76 @@ FrameType get_frame_type(const std::vector<uint8_t> &buffer) {
   }
 }
 
-/// This function extracts the source and destination MAC addresses, source
-/// and Params: destination IP addresses, source and destination ports,
-/// payload, protocol Expexcptions:
-/// - If the packet is too small to contain an IP header, it throws a
-/// runtime_error
-/// - If the Ethernet type is not IPv4, it throws a runtime_error
-/// - If the packet is too small to contain IP and UDP headers, it throws an
-/// invalid_argument
-void get_packet_data(const std::vector<uint8_t> &buffer, std::string &src_mac,
+void get_mac_address(std::span<const uint8_t> buffer,
+                     std::string &src_mac_address,
+                     std::string &dst_mac_address) {
+  if (buffer.size() < 14) {
+    throw std::runtime_error("Packet too small to contain Ethernet header.");
+  }
+
+  std::ostringstream dst_oss, src_oss;
+  for (int i = 0; i < 6; ++i) {
+    if (i > 0)
+      dst_oss << ":";
+    dst_oss << std::hex << std::setfill('0') << std::setw(2)
+            << static_cast<int>(buffer[i]);
+  }
+  for (int i = 6; i < 12; ++i) {
+    if (i > 6)
+      src_oss << ":";
+    src_oss << std::hex << std::setfill('0') << std::setw(2)
+            << static_cast<int>(buffer[i]);
+  }
+
+  dst_mac_address = dst_oss.str();
+  src_mac_address = src_oss.str();
+}
+
+void get_ipv4_address(std::span<const uint8_t> buffer, std::string &src_ip_str,
+                      std::string &dst_ip_str) {
+  if (buffer.size() < 20) {
+    throw std::runtime_error("Buffer too small for IPv4 header.");
+  }
+
+  src_ip_str = std::to_string(buffer[12]) + "." + std::to_string(buffer[13]) +
+               "." + std::to_string(buffer[14]) + "." +
+               std::to_string(buffer[15]);
+
+  dst_ip_str = std::to_string(buffer[16]) + "." + std::to_string(buffer[17]) +
+               "." + std::to_string(buffer[18]) + "." +
+               std::to_string(buffer[19]);
+}
+
+void get_packet_data(std::span<const uint8_t> buffer, std::string &src_mac,
                      std::string &dst_mac, std::string &src_ip,
                      std::string &dst_ip, uint16_t &src_port,
-                     uint16_t &dst_port, std::string &payload,
+                     uint16_t &dst_port, std::span<const uint8_t> &payload,
                      uint8_t &protocol) {
-  if (buffer.size() < 20) {
-    throw std::runtime_error("Packet too small to contain IP .");
+  if (buffer.size() < 14) {
+    throw std::runtime_error("Packet too small to contain Ethernet header.");
   }
-  if (buffer[12] < 0x06) { //
-    // means its snap/llc packet, we will not handle it for now
-    // std::cout << std::endl;
-    // std::cout << "<============= new SNAP/LLC packet detected "
-    //           << "=================>" << std::endl;
 
-    throw std::runtime_error(
-        "Not an IPv4 packet. SNAP/LLC is not supported yet.:)");
-  }
-  // handle the case of ipv4 packet
-  else if (buffer[12] == 0x08 && buffer[13] == 0x00) {
+  FrameType type = get_frame_type(buffer);
 
-    // std::cout << std::endl;
-    // std::cout << "<============= new IPv4 packet detected.
-    // =================>"
-    //           << std::endl;
-    //
-    // std::cout << "the ipv4 header (next 20 bytes): ";
-    // for (int i = 0; i <= 19; i++) {
-    //   std::cout << (int)buffer[i + 14] << " ";
-    // }
-    // std::cout << std::hex << "Ethernet type: 0x" << (int)buffer[12]
-    // << (int)buffer[13] << std::dec << std::endl;
+  if (type == FrameType::IPv4) {
+    std::span<const uint8_t> ipv4_layer = get_ipv4_layer(buffer);
+
     get_mac_address(buffer, src_mac, dst_mac);
-    get_ipv4_address(((uint8_t *)buffer.data()), src_ip, dst_ip);
-    src_port = ntohs(*(uint16_t *)(buffer.data() + 20));
-    dst_port = ntohs(*(uint16_t *)(buffer.data() + 22));
-    payload = std::string(buffer.begin() + 28, buffer.end());
+    get_ipv4_address(ipv4_layer, src_ip, dst_ip);
 
-  }
-  // handle the case of arp packet
-  else if (buffer[12] == 0x08 && buffer[13] == 0x06) {
-    std::cout << std::endl;
-    std::cout << "<============= new ARP packet detected. =================>";
+    protocol = ipv4_layer[9]; // Protocol field in IPv4 header
+
+    src_port = ntohs(*reinterpret_cast<const uint16_t *>(buffer.data() + 34));
+    dst_port = ntohs(*reinterpret_cast<const uint16_t *>(buffer.data() + 36));
+
+    if (buffer.size() > 42) {
+      payload = buffer.subspan(42);
+    } else {
+      throw std::runtime_error("fram to small to contain payload");
+    }
+  } else if (type == FrameType::ARP) {
     get_mac_address(buffer, src_mac, dst_mac);
-  }
-  // handle the case of vlan tagged packet
-  else if (buffer[12] == 0x81 && buffer[13] == 0x00) {
-    throw std::runtime_error("Vlan tagged packet, not supported yet.:)");
-  }
-  // handle the case of ipv6 packet
-  else if ((buffer[12] == 0x86 || buffer[13] == 0xdd)) {
-    throw std::runtime_error(
-        "Not an IPv4 packet. IPv6 is not supported yet.:)");
-  }
-  // handle the case of unknown packet type
-  else {
-    std::ostringstream ss;
-    ss << "Unknown packet type. Ethernet type: 0x" << std::hex
-       << std::setfill('0') << std::setw(2) << static_cast<int>(buffer[12])
-       << std::setfill('0') << std::setw(2) << static_cast<int>(buffer[13]);
-
-    throw std::runtime_error(ss.str());
+  } else {
+    throw std::runtime_error("Unsupported or unknown packet type.");
   }
 }

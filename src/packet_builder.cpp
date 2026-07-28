@@ -2,12 +2,14 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <netinet/in.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <sys/socket.h>
 #include <vector>
 
-uint16_t calculate_ip_checksum(const uint8_t *buf, int len) {
+uint16_t calculate_ip_checksum(const std::span<uint8_t> buf, int len) {
   uint32_t sum = 0;
 
   for (size_t i = 0; i < len; i += 2) {
@@ -16,9 +18,12 @@ uint16_t calculate_ip_checksum(const uint8_t *buf, int len) {
     sum += word;
   }
 
+  // if its not ipv4. it will not get to the if in ipv4 because its never odd
+  if (len & 1)
+    sum += static_cast<uint16_t>(buf[len - 1]) << 8;
+
   while (sum >> 16)
     sum = (sum & 0xFFFF) + (sum >> 16);
-
   return static_cast<uint16_t>(~sum);
 }
 
@@ -103,8 +108,40 @@ void handle_ip4_layer(std::vector<uint8_t> &buffer, std::string &src_ip,
   buffer[10] = 0x00;
   buffer[11] = 0x00;
   // Recalculate IP checksum
-  uint16_t new_checksum = calculate_ip_checksum(buffer.data(), 20);
+  uint16_t new_checksum = 0;
   uint16_t net = htons(new_checksum);
   buffer[10] = net >> 8;
   buffer[11] = net & 0xFF;
+}
+
+///< summary>
+/// This function changes the source and destination IPv4 addresses in the given
+/// packet buff er and recalculates the IP header checksum.
+/// vector<unint8_t> buffer- a raw ip header packet
+void change_ipv4_addresses(std::span<uint8_t> buffer,
+                           const std::string &new_src_ip,
+                           const std::string &new_dst_ip) {
+  if (buffer.size() < 20) {
+    throw std::runtime_error("Packet too small to contain IP header.");
+  }
+
+  struct iphdr *ip = reinterpret_cast<struct iphdr *>(buffer.data());
+
+  if (ip->version != 4) {
+    throw std::runtime_error("Not an IPv4 packet");
+  }
+
+  in_addr src_ip{};
+  in_addr dst_ip{};
+  if (inet_pton(AF_INET, new_src_ip.c_str(), &src_ip) != 1) {
+    throw std::runtime_error("invalid src ip");
+  }
+  if (inet_pton(AF_INET, new_dst_ip.c_str(), &dst_ip) != 1) {
+    throw std::runtime_error("invlaid dst ip");
+  }
+
+  ip->saddr = src_ip.s_addr;
+  ip->daddr = dst_ip.s_addr;
+  ip->check = 0;
+  ip->check = calculate_ip_checksum(buffer, ip->ihl * 4);
 }
