@@ -12,6 +12,9 @@ void RawSocket::open_raw_socket(int domain, int protocol) {
   }
 }
 
+/// This function is for ensuring a raw socket is created for sniffing. if not
+/// it will creat it Params: interface_name: the name of the interface tmmsghdro
+
 void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len,
                                 const std::string &interface_name) {
 
@@ -34,8 +37,6 @@ void RawSocket::send_raw_packet(const uint8_t *packet, size_t packet_len,
                              " | Error: " + std::strerror(errno));
   }
 }
-/// This function is for ensuring a raw socket is created for sniffing. if not
-/// it will creat it Params: interface_name: the name of the interface tmmsghdro
 /// sniff on.
 void RawSocket::ensure_socket(const std::string &interface_name) {
   if (this->sockfd_ > 0) {

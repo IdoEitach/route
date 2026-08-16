@@ -1,5 +1,6 @@
 #include "../include/packet_detail.h"
 #include <arpa/inet.h>
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -72,6 +73,17 @@ void get_ipv4_address(std::span<const uint8_t> buffer, std::string &src_ip_str,
   dst_ip_str = std::to_string(buffer[16]) + "." + std::to_string(buffer[17]) +
                "." + std::to_string(buffer[18]) + "." +
                std::to_string(buffer[19]);
+}
+
+void get_arp_type(std::span<const uint8_t> buffer, uint16_t &op_code) {
+
+  if (buffer.size() < 28) {
+    throw std::runtime_error("Buffer too small for ARP packet.");
+  }
+
+  uint16_t op_code_big_endian = *reinterpret_cast<const uint16_t *>(&buffer[6]);
+  op_code = (op_code_big_endian >> 8) & 0x00FF |
+            (op_code_big_endian << 8) & 0xFF00; // Convert to host byte order
 }
 
 void get_packet_data(std::span<const uint8_t> buffer, std::string &src_mac,

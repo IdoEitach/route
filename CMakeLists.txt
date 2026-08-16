@@ -16,6 +16,8 @@ add_executable(main
     src/hash_table.cpp
     src/forward.c         # Now this will actually compile!
     src/packet.c
+    src/packet_handler.cpp
+    src/arp_resolver.cpp
 )
 
 include_directories(include)

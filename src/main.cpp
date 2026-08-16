@@ -1,5 +1,6 @@
 #include "../include/packet_batch.h"
 #include "../include/packet_builder.h"
+#include "../include/packet_handler.h"
 #include "../include/rawsock.h"
 #include <cstdint>
 #include <iostream>
@@ -45,71 +46,53 @@ void sniff_thread(RawSocket &sniffer_socket, const std::string &interface_name,
 /// &to_send_queue pointers to the packet batch that are ready to send.
 void process_thread(SafeQueue<PacketBatch *> &to_process_queue,
                     SafeQueue<PacketBatch *> &to_send_queue) {
+
+  PacketContext ctx{to_send_queue};
+
+  static const std::unordered_map<FrameType, PacketHandler> dispatch_table = {
+      {FrameType::IPv4, handle_ipv4}, {FrameType::ARP, handle_arp}};
+
   while (true) {
     PacketBatch *packet_batch = nullptr;
     packet_batch = to_process_queue.pop();
-    int error_count = 0;
+    int write_index = 0;
     for (int i = 0; i < (*packet_batch).packets_received; ++i) {
       try {
+        FrameType frmae_type = get_frame_type(packet_batch->packets[i]);
 
-        std::string src_mac, dst_mac, src_ip, dst_ip;
-        std::span<const uint8_t> payload;
-        uint16_t src_port, dst_port;
-        uint8_t protocol;
-        std::span<uint8_t> packet_span = packet_batch->packets[i];
-        std::span<uint8_t> ipv4_pointer =
-            get_ipv4_layer(packet_batch->packets[i]);
-        change_ipv4_addresses(ipv4_pointer, "10.100.102.6", "10.100.102.21");
-
-        get_packet_data((*packet_batch).packets[i], src_mac, dst_mac, src_ip,
-                        dst_ip, src_port, dst_port, payload, protocol);
-        std::cout << "this is what sending !!!!!!!!!!!!!!!!!!!!!!" << std::endl;
-        std::cout << "Src Mac: " << src_mac << ", Dst Mac: " << dst_mac
-                  << std::endl;
-        std::cout << "Src IP: " << src_ip << ", Dst IP: " << dst_ip
-                  << ", Src Port: " << src_port << ", Dst Port: " << dst_port
-                  << ", Protocol: " << (int)protocol << std::endl;
-
-        src_ip.clear();
-        dst_ip.clear();
-        src_mac.clear();
-        dst_mac.clear();
-        src_port = 0;
-        dst_port = 0;
-
-      } catch (const std::runtime_error &e) {
-        std::cerr << "Runtime error processing packets: " << e.what()
-                  << std::endl;
-        error_count++;
-
-        if (error_count >= 5) {
-          std::cerr << "Too many errors processing this packet, dropping it."
-                    << std::endl;
-
-          error_count = 0; // Reset error count on unsuccessful processing
-          continue;
+        auto handler_it = dispatch_table.find(frmae_type);
+        if (handler_it != dispatch_table.end()) {
+          bool keep_packet =
+              handler_it->second((*packet_batch).packets[i], ctx);
+          if (keep_packet) {
+            if (write_index != i) {
+              packet_batch->packets[write_index] =
+                  std::move(packet_batch->packets[i]);
+            }
+            packet_batch->msgs[write_index].msg_len =
+                packet_batch->msgs[i].msg_len;
+            ++write_index;
+          }
+        } else {
+          std::cerr << "No handler for frame type: "
+                    << static_cast<int>(frmae_type) << std::endl;
         }
+
       } catch (const std::exception &e) {
-        std::cerr << "Error processing packets: " << e.what() << std::endl;
-        error_count++;
-        if (error_count >= 5) {
-          std::cerr << "Too many errors processing this packet, dropping it."
-                    << std::endl;
-
-          error_count = 0; // Reset error count on unsuccessful processing
-          continue;
-        }
+        std::cerr << "Error processing packet: " << e.what() << std::endl;
       }
-      error_count = 0; // Reset error count on successful processing
     }
+
+    packet_batch->packets_received = write_index;
+
     to_send_queue.push(packet_batch);
   }
 }
 
 /// <summary>
 /// This function is for sending packets in a batch.
-/// It consume from the to_send_queue and send packets and than return the batch
-/// to the empty_queue.
+/// It consume from the to_send_queue and send packets and than return the
+/// batch to the empty_queue.
 /// </summary>
 /// <param>
 /// <param name="rawsocket">The raw socket to send packets through.</param>
@@ -127,21 +110,36 @@ void send_thread(RawSocket &rawsocket, const std::string &interface_name,
 
   while (true) {
     PacketBatch *packet_batch = nullptr;
-
     packet_batch = to_send_queue.pop();
+    if (packet_batch == nullptr) {
+      std::cerr << "Error: Received a null packet batch from to_send_queue."
+                << std::endl;
+      continue; // Skip this iteration and wait for the next batch
+    }
     packet_batch->prepare_for_send(); // Prepare the packet batch for sending
-    for (int i = 0; i < (*packet_batch).packets_received; ++i) {
-      try {
-
-        rawsocket.send_raw_packet((*packet_batch).packets[i].data(),
-                                  packet_batch->msgs[i].msg_len,
-                                  interface_name);
-        std::cout << "Packet sent successfully!" << std::endl;
-      } catch (const std::exception &e) {
-        std::cerr << "Error sending packet: " << e.what() << std::endl;
+    if ((*packet_batch).packets_received > 0) {
+      for (int i = 0; i < (*packet_batch).packets_received; ++i) {
+        try {
+          std::cout << "Sending packet of size: "
+                    << packet_batch->msgs[i].msg_len << std::endl;
+          rawsocket.send_raw_packet((*packet_batch).packets[i].data(),
+                                    packet_batch->msgs[i].msg_len,
+                                    interface_name);
+          // std::cout << "Packet sent successfully!" << std::endl;
+        } catch (const std::exception &e) {
+          std::cerr << "Error sending packet: " << e.what() << std::endl;
+          std::cerr << "Packet size: " << packet_batch->msgs[i].msg_len
+                    << std::endl;
+          std::cerr << "Packet data: ";
+          for (size_t j = 0; j < packet_batch->msgs[i].msg_len; ++j) {
+            std::cerr << std::hex
+                      << static_cast<int>(packet_batch->packets[i][j]) << " ";
+          }
+          std::cerr << std::dec << std::endl; // Reset to decimal output
+        }
+        // Return the packet batch to the empty
+        // queue for reuse
       }
-      // Return the packet batch to the empty
-      // queue for reuse
     }
 
     packet_batch->reset_for_recv(65536); // Reset the packet batch for receiving
@@ -157,7 +155,7 @@ int main() {
   uint16_t src_port = 12345;
   uint16_t dst_port = 55555;
   constexpr unsigned int BATCH_SIZE = 10;
-  constexpr unsigned int TIMEOUT_MS = 10000;
+  constexpr unsigned int TIMEOUT_MS = 1000;
   std::vector<std::vector<uint8_t>> packet_batch;
   int packets_recieved_counter = 0;
   RawSocket sniffer_socket;
@@ -167,10 +165,6 @@ int main() {
 
   sender_socket.open_raw_socket(AF_PACKET, htons(ETH_P_ALL));
   std::cout << "the sedner socket fd" << sender_socket.sockfd_ << std::endl;
-  std::string src_ip_sniff, dst_ip_sniff, payload_sniff;
-  std::string src_mac_sniff, dst_mac_sniff;
-  uint16_t src_port_sniff, dst_port_sniff;
-  uint8_t protocol_sniff;
 
   SafeQueue<PacketBatch *> empty_queue;
   SafeQueue<PacketBatch *> full_queue;
